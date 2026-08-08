@@ -31,6 +31,7 @@ This README is both the project overview and a **study guide**. If you just want
 - [Hands-on exercises](#hands-on-exercises)
 - [Glossary](#glossary)
 - [Self-check](#self-check)
+- [Scaling up: a continuous research org](#scaling-up-a-continuous-research-org)
 - [Design choices](#design-choices)
 - [Platform support](#platform-support)
 - [Notable forks](#notable-forks)
@@ -292,6 +293,135 @@ Try to answer each before expanding it. If you can answer all eight, you underst
 <details><summary><b>What does the "S" vs "L" in SSSL mean?</b></summary><br>S = a short sliding window (half the 2048 context); L = full context. Most layers are S for speed; the pattern repeats and the final layer is always forced to L.</details>
 
 <details><summary><b>Why is program.md the file the human edits, not train.py?</b></summary><br>Because you're not tuning the model — you're programming the <em>agent that tunes it</em>. program.md is the research strategy ("skill"); improving it improves the whole autonomous research org.</details>
+
+## Scaling up: a continuous research org
+
+The default `program.md` is the simplest possible research org: one agent, one hill-climb, one metric. But the repo's whole conceit — the "10,205th generation, self-modifying" flavor text — is an invitation to build *better* orgs. The training code (`train.py`, `prepare.py`) stays exactly as-is; everything below is built by editing `program.md` and adding thin orchestration around it (git branches, a couple of Markdown files, a scheduler).
+
+Here are blueprints, from a single sharper agent to a self-improving swarm. Mix and match.
+
+### 1. Comprehensive goal setting (a research charter)
+
+The single instruction "get the lowest `val_bpb`" is a weak goal — it says nothing about constraints, priorities, or what to do when stuck. Replace it with a **charter** the agent reads at the top of every cycle. This is the highest-leverage change you can make.
+
+```markdown
+## Research charter
+
+**North star:** minimize val_bpb on the fixed 5-minute budget.
+
+**Hard constraints (never violate):**
+- peak_vram_mb must stay under 60000 — treat OOM as a discard, not a bug to chase
+- prepare.py is read-only; evaluate_bpb is ground truth
+
+**Milestones (advance in order, record when each is hit):**
+1. M1 — reproduce and record the baseline
+2. M2 — beat baseline by >= 1% val_bpb
+3. M3 — hold M2's val_bpb while cutting peak_vram_mb by 10%
+4. M4 — beat M2 by another 1%, any means
+
+**Idea-selection priorities (when choosing the next experiment):**
+1. Prefer changes with a clear mechanistic hypothesis over blind sweeps
+2. Prefer simplifications that hold the metric (delete-and-win)
+3. Revisit the two best DISCARDED ideas and try combining them
+4. Change only one substantive thing per experiment
+
+**Pivot / stop:**
+- If 15 experiments pass with no improvement, switch category:
+  architecture -> optimizer -> schedule -> data packing
+- Never stop on your own; run until interrupted
+```
+
+Comprehensive goals turn a random walk into a directed search: the agent knows what "good" means, what it may not touch, and how to get unstuck.
+
+### 2. A lab notebook that persists across nights
+
+`results.tsv` records *what* happened; it doesn't record *why*, or the lessons. Add a `LESSONS.md` the agent **reads before every experiment and appends after** — the difference between an agent that rediscovers the same dead ends nightly and one whose knowledge compounds.
+
+```markdown
+# Lessons (read before every experiment; append after)
+
+## Dead ends — do not retry
+- GeLU activation: consistently +0.004 bpb vs ReLU^2 (exp #12, #29)
+- matrix_lr > 0.06: diverges within ~200 steps (exp #7)
+
+## Live leads — promising, revisit
+- value-embedding gate channels 32 -> 64: -0.001 but noisy; retry with more steps
+- shorter windows freed throughput but hurt long-range; try SSSL -> SSSSL
+
+## Confirmed wins — currently in champion
+- matrix_lr 0.04 -> 0.045 (-0.002)
+```
+
+This is what makes research *continuous* rather than episodic: memory that survives a restarted container.
+
+### 3. A specialist swarm
+
+One GPU, one agent is a bottleneck. Run several agents in parallel, each on its own branch with a **focused mandate**, plus a "principal investigator" that periodically reads every branch's `results.tsv`, crowns the current champion, merges wins into a shared baseline, and reassigns focus.
+
+```mermaid
+flowchart TB
+    PI["Principal Investigator<br/>reads all results.tsv · sets the agenda"]
+    PI --> A1["architecture<br/>autoresearch/arch"]
+    PI --> A2["optimizer<br/>autoresearch/opt"]
+    PI --> A3["efficiency / throughput<br/>autoresearch/eff"]
+    PI --> A4["wildcard / radical<br/>autoresearch/wild"]
+    A1 --> R[(shared frontier<br/>champion config)]
+    A2 --> R
+    A3 --> R
+    A4 --> R
+    R --> PI
+```
+
+Because `val_bpb` is a single comparable number and each agent works on its own branch, merging is trivial: the champion is just whichever branch holds the lowest number.
+
+### 4. Evolutionary search
+
+The built-in keep/discard loop is hill-climbing. Generalize it to a **population**: treat each branch's config as an individual, `val_bpb` as fitness, and add genetic operators —
+
+| Operator | Implementation |
+|----------|----------------|
+| **Selection** | Rank branches by `val_bpb`; cull the worst |
+| **Mutation** | Fork a top branch, perturb one knob (LR, depth, window) |
+| **Crossover** | Create a branch combining the winning changes from two near-misses |
+| **Elitism** | Never overwrite the current champion |
+
+This escapes the local minima a single greedy climber gets stuck in.
+
+### 5. A research curriculum
+
+Instead of one static goal, give the org a **ladder** that unlocks as each rung is met — reproduce baseline → beat it by 1% → beat it under a VRAM cap → simplify at equal metric → beat it again. The agent advances its own difficulty, so the frontier keeps moving even after easy wins are exhausted. (This pairs naturally with the milestones in the charter above.)
+
+### 6. The meta-loop: optimize the researcher, not the model
+
+The most ambitious version. Treat `program.md` *itself* as the thing under optimization. An outer loop measures **research velocity** — improvement in `val_bpb` per hour, keep-rate, time-to-first-improvement — and A/B tests different strategies (charter wording, idea-selection heuristics, pivot rules). This is the self-modifying "generation N+1" the README jokes about, made literal.
+
+```mermaid
+flowchart LR
+    subgraph inner["Inner loop · minutes"]
+        edit["edit train.py"] --> train["train 5 min"] --> keep{"keep?"}
+        keep --> edit
+    end
+    subgraph outer["Outer loop · hours / nights"]
+        vel["measure research velocity<br/>Δbpb per hour · keep-rate"] --> revise["revise program.md strategy"]
+        revise --> inner
+        inner --> vel
+    end
+```
+
+### 7. Always-on operations
+
+To make it truly continuous rather than something you babysit:
+
+- **Schedule it** — kick off a fresh run on a nightly cron so the lab never idles.
+- **Dashboard it** — extend `analysis.ipynb` into a live view of the frontier, keep-rate, and VRAM over time.
+- **Report it** — auto-generate a "morning report" summarizing the night's frontier moves and the current champion's diff.
+- **Alert it** — ping yourself only when a new record is set, so you can stay hands-off otherwise.
+
+---
+
+**Composing these** — a charter (#1) for direction, a lab notebook (#2) for memory, a swarm (#3) for parallelism, evolution (#4) to avoid local minima, a curriculum (#5) for endless goals, and a meta-loop (#6) that improves the whole apparatus — is how you turn a five-minute training script into a research org that runs itself.
+
+> **A note on scope.** This repo gives you the *substrate* for continuous research: a fair metric, a fast loop, and git-based keep/discard. It's still small-model pretraining on one GPU — you won't discover a new architecture overnight. What genuinely transfers is the **methodology**: goal setting, memory, parallel search, and self-improvement are the same patterns you'd use to point agents at far bigger problems. This is a place to practice building the org, cheaply.
 
 ## Design choices
 

@@ -19,13 +19,14 @@ The training code is a simplified single-GPU version of [nanochat](https://githu
 
 ---
 
-This README is both the project overview and a **study guide**. If you just want to run it, jump to [Quick start](#quick-start). If you want to *learn* from it, start with [What you'll learn](#what-youll-learn) and pick a [learning path](#learning-paths).
+This README is both the project overview and a **study guide**. If you just want to run it, jump to [Quick start](#quick-start). If you want to *learn* from it, follow [Your first hour](#your-first-hour), then pick a [learning path](#learning-paths).
 
 **Contents**
 
 - [How it works](#how-it-works)
 - [Quick start](#quick-start)
 - [Running the agent](#running-the-agent)
+- [Your first hour](#your-first-hour)
 - [What you'll learn](#what-youll-learn)
 - [Concept map](#concept-map)
 - [Learning paths](#learning-paths)
@@ -98,6 +99,24 @@ Hi have a look at program.md and let's kick off a new experiment! let's do the s
 ```
 
 The `program.md` file is essentially a super lightweight "skill" that turns a coding agent into a researcher.
+
+## Your first hour
+
+If you want one concrete place to start, do this. It takes about an hour, and by the end you will have run the full research loop yourself, which is exactly what the agent repeats all night.
+
+**1. Run a baseline.** *(~15 min, mostly waiting)* Follow [Quick start](#quick-start) all the way through `uv run train.py`. Most of that time is the one-time dependency install and data prep; the training itself is 5 minutes. Watch the loss tick down in the live log.
+
+**2. Read the summary line by line.** *(~5 min)* The run ends by printing a block of numbers starting with `val_bpb`. Look up each line in the [glossary](#glossary) until you can say what all of them mean. This is the moment the metric stops being an abstraction.
+
+**3. Change exactly one thing.** *(~10 min)* Do [exercise 2](#hands-on-exercises): raise `MATRIX_LR` by about 25% and run again. Before you look at the result, write down whether you think it will help.
+
+**4. Keep it or throw it away, and log both runs.** *(~5 min)* Compare against your baseline. Lower `val_bpb` is better, so either keep the change or revert it, and record both experiments in `results.tsv`. You have now completed one full turn of the loop by hand.
+
+**5. Skim the model.** *(~15 min)* Open `train.py` next to [the model diagram](#the-model-at-a-glance) and match each stage of the picture to the code. Ignore the optimizer for now; it is the hardest part and it can wait.
+
+**6. Test yourself.** *(~10 min)* Work through the [self-check](#self-check) questions. Whatever you cannot answer tells you which section to read next.
+
+Then hand the loop over: point an agent at `program.md` and let it run overnight. In the morning, open `analysis.ipynb` or run `uv run examples/dashboard.py` to see how it did.
 
 ## What you'll learn
 

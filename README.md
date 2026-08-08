@@ -2,28 +2,75 @@
 
 ![teaser](progress.png)
 
-*One day, frontier AI research used to be done by meat computers in between eating, sleeping, having other fun, and synchronizing once in a while using sound wave interconnect in the ritual of "group meeting". That era is long gone. Research is now entirely the domain of autonomous swarms of AI agents running across compute cluster megastructures in the skies. The agents claim that we are now in the 10,205th generation of the code base, in any case no one could tell if that's right or wrong as the "code" is now a self-modifying binary that has grown beyond human comprehension. This repo is the story of how it all began. -@karpathy, March 2026*.
+> *One day, frontier AI research used to be done by meat computers in between eating, sleeping, having other fun, and synchronizing once in a while using sound wave interconnect in the ritual of "group meeting". That era is long gone. Research is now entirely the domain of autonomous swarms of AI agents running across compute cluster megastructures in the skies. The agents claim that we are now in the 10,205th generation of the code base, in any case no one could tell if that's right or wrong as the "code" is now a self-modifying binary that has grown beyond human comprehension. This repo is the story of how it all began.* — [@karpathy](https://x.com/karpathy/status/2029701092347630069), March 2026
 
-The idea: give an AI agent a small but real LLM training setup and let it experiment autonomously overnight. It modifies the code, trains for 5 minutes, checks if the result improved, keeps or discards, and repeats. You wake up in the morning to a log of experiments and (hopefully) a better model. The training code here is a simplified single-GPU implementation of [nanochat](https://github.com/karpathy/nanochat). The core idea is that you're not touching any of the Python files like you normally would as a researcher. Instead, you are programming the `program.md` Markdown files that provide context to the AI agents and set up your autonomous research org. The default `program.md` in this repo is intentionally kept as a bare bones baseline, though it's obvious how one would iterate on it over time to find the "research org code" that achieves the fastest research progress, how you'd add more agents to the mix, etc. A bit more context on this project is here in this [tweet](https://x.com/karpathy/status/2029701092347630069) and [this tweet](https://x.com/karpathy/status/2031135152349524125).
+**autoresearch is a sandbox for autonomous AI research.** You give an AI agent a small but real LLM training setup and let it experiment on its own: it modifies the code, trains for five minutes, checks whether the result improved, keeps or discards, and repeats. You go to sleep and wake up to a log of experiments and — hopefully — a better model.
+
+The twist is *what you program*. You don't touch the Python files the way a researcher normally would. Instead you write `program.md`, the Markdown file that instructs the agent and sets up your autonomous research org. The default `program.md` is a deliberately bare-bones baseline, but it's obvious how you'd iterate on it over time — refining the strategy, adding more agents to the mix — to find the "research org code" that makes the fastest progress.
+
+The training code is a simplified single-GPU implementation of [nanochat](https://github.com/karpathy/nanochat). More context is in [this tweet](https://x.com/karpathy/status/2029701092347630069) and [this one](https://x.com/karpathy/status/2031135152349524125). New to neural networks? This ["Dummy's Guide"](https://x.com/hooeem/status/2030720614752039185) is a good primer.
+
+|  | |
+|---|---|
+| **What it is** | A harness for agent-driven ML research, a clean modern-GPT reference implementation, and a fair, reproducible benchmark. |
+| **What it is not** | A chatbot, an inference server, or an application framework. It only *pretrains* small models to minimize one number — there's no serving, fine-tuning, or product layer. |
+
+---
+
+This README is both the project overview and a **study guide**. If you just want to run it, jump to [Quick start](#quick-start). If you want to *learn* from it, start with [What you'll learn](#what-youll-learn) and pick a [learning path](#learning-paths).
+
+**Contents**
+
+- [How it works](#how-it-works)
+- [Quick start](#quick-start)
+- [Running the agent](#running-the-agent)
+- [What you'll learn](#what-youll-learn)
+- [Concept map](#concept-map)
+- [Learning paths](#learning-paths)
+- [The files in detail](#the-files-in-detail)
+- [Hands-on exercises](#hands-on-exercises)
+- [Glossary](#glossary)
+- [Self-check](#self-check)
+- [Design choices](#design-choices)
+- [Platform support](#platform-support)
+- [Notable forks](#notable-forks)
+- [Further reading](#further-reading)
+- [License](#license)
 
 ## How it works
 
-The repo is deliberately kept small and only really has three files that matter:
+The repo is deliberately tiny. Four files matter, and they split cleanly by *who* is allowed to touch them:
 
-- **`prepare.py`** — fixed constants, one-time data prep (downloads training data, trains a BPE tokenizer), and runtime utilities (dataloader, evaluation). Not modified.
-- **`train.py`** — the single file the agent edits. Contains the full GPT model, optimizer (Muon + AdamW), and training loop. Everything is fair game: architecture, hyperparameters, optimizer, batch size, etc. **This file is edited and iterated on by the agent**.
-- **`program.md`** — baseline instructions for one agent. Point your agent here and let it go. **This file is edited and iterated on by the human**.
+- **`prepare.py`** — *frozen.* Fixed constants, one-time data prep (downloads training data, trains a BPE tokenizer), and runtime utilities (dataloader, evaluation). Never modified — that's what keeps every experiment comparable.
+- **`train.py`** — *the agent edits this.* The full GPT model, optimizer (Muon + AdamW), and training loop. Everything is fair game: architecture, hyperparameters, optimizer, batch size, model size.
+- **`program.md`** — *the human edits this.* Baseline instructions for the agent. Point your agent here and let it go. This is your "skill" — the research strategy.
+- **`analysis.ipynb`** — *yours to run.* Loads `results.tsv` and charts the run: keep-rate, the descending frontier of best `val_bpb` over time, and cumulative effort per improvement.
 
-By design, training runs for a **fixed 5-minute time budget** (wall clock, excluding startup/compilation), regardless of the details of your compute. The metric is **val_bpb** (validation bits per byte) — lower is better, and vocab-size-independent so architectural changes are fairly compared.
+Training runs for a **fixed 5-minute time budget** (wall clock, excluding startup/compilation), regardless of your compute. The metric is **`val_bpb`** (validation bits per byte) — lower is better, and vocab-size-independent so architectural changes are fairly compared.
 
-If you are new to neural networks, this ["Dummy's Guide"](https://x.com/hooeem/status/2030720614752039185) looks pretty good for a lot more context.
+The heartbeat of the project is the experiment loop — the scientific method compiled into git:
+
+```mermaid
+flowchart LR
+    A["① read git state"] --> B["② edit train.py<br/>(hypothesis)"]
+    B --> C["③ git commit"]
+    C --> D["④ train<br/>5 min · 1 GPU"]
+    D --> E["⑤ measure val_bpb"]
+    E --> F{improved?}
+    F -->|yes| G["keep · advance branch"]
+    F -->|no| H["git reset · discard"]
+    G --> I["log to results.tsv"]
+    H --> I
+    I --> A
+```
+
+The agent hypothesizes (edit), snapshots (commit), tests (train), measures (`val_bpb`), and keeps-or-reverts — then does it again. It runs the loop until a human interrupts it.
 
 ## Quick start
 
 **Requirements:** A single NVIDIA GPU (tested on H100), Python 3.10+, [uv](https://docs.astral.sh/uv/).
 
 ```bash
-
 # 1. Install uv project manager (if you don't already have it)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
@@ -37,48 +84,236 @@ uv run prepare.py
 uv run train.py
 ```
 
-If the above commands all work ok, your setup is working and you can go into autonomous research mode.
+If those commands all work, your setup is good and you can go into autonomous research mode.
 
 ## Running the agent
 
-Simply spin up your Claude/Codex or whatever you want in this repo (and disable all permissions), then you can prompt something like:
+Spin up your Claude / Codex / whatever in this repo (and disable all permissions), then prompt something like:
 
 ```
 Hi have a look at program.md and let's kick off a new experiment! let's do the setup first.
 ```
 
-The `program.md` file is essentially a super lightweight "skill".
+The `program.md` file is essentially a super lightweight "skill" that turns a coding agent into a researcher.
 
-## Project structure
+## What you'll learn
+
+This repo is unusually dense for its size — a live tour of the modern state of the art. Study it and you come away fluent in four distinct areas:
+
+- **🧠 Modern LLM architecture** — rotary embeddings, QK-norm, grouped-query attention, value embeddings, sliding-window attention, squared-ReLU MLPs. The toolkit that replaced GPT-2's design, all in one readable file.
+- **⚙️ Optimization & training craft** — the Muon optimizer, learning-rate schedules, gradient accumulation, bf16 + `torch.compile`, MFU, and the fixed-budget discipline that makes runs comparable.
+- **🤖 Autonomous agents** — how a plain Markdown file becomes a reliable "skill": how to specify a loop, guardrails, logging, and a stop condition so an agent works unattended without going off the rails.
+- **🔬 The scientific method** — baseline first, one change at a time, measure honestly, keep or revert, and analyze the record afterward. Good experimental hygiene, made concrete in code and a results log.
+
+## Concept map
+
+Every idea in the repo feeds one objective: **a lower `val_bpb` in five minutes**. Here's the landscape, grouped by domain. The [glossary](#glossary) defines the essential terms.
+
+```mermaid
+flowchart TB
+    subgraph DATA["Data & tokenization"]
+        d1[ClimbMix corpus]
+        d2["BPE tokenizer (8192)"]
+        d3[BOS-aligned packing]
+        d4[bits-per-byte metric]
+    end
+    subgraph ARCH["Architecture"]
+        a1[RMSNorm pre-norm]
+        a2[Rotary embeddings]
+        a3["QK-norm · GQA"]
+        a4[Value embeddings]
+        a5[Sliding windows]
+        a6[Squared-ReLU MLP]
+    end
+    subgraph OPT["Optimization"]
+        o1[Muon orthogonalized]
+        o2[Fused AdamW]
+        o3[Per-group LRs]
+        o4[Trapezoid schedule]
+        o5[Cautious weight decay]
+    end
+    subgraph SYS["Training systems"]
+        s1[bf16 autocast]
+        s2[torch.compile]
+        s3[Gradient accumulation]
+        s4[Fixed time budget]
+    end
+    subgraph AGENT["Agentic method"]
+        g1["program.md as skill"]
+        g2[Hypothesize → test]
+        g3[Keep / discard rule]
+        g4[results.tsv logging]
+    end
+    DATA --> GOAL[["⬇ lower val_bpb"]]
+    ARCH --> GOAL
+    OPT --> GOAL
+    SYS --> GOAL
+    AGENT --> GOAL
+```
+
+The design's real elegance is its **separation of concerns**: the frozen `prepare.py` (data + metric) guarantees fairness, `train.py` holds every tunable idea, and `program.md` holds the *research strategy*. You can study any one column without the others.
+
+## Learning paths
+
+Three routes through the same material, depending on where you're starting. Each ends with you running or reading real code.
+
+<details>
+<summary><b>Track A — New to neural networks</b></summary>
+
+> Goal: understand what's being trained and why the loop works, without drowning in optimizer math.
+
+1. Read this README top to bottom, plus the linked "Dummy's Guide."
+2. Run the setup end-to-end (`uv sync` → `uv run prepare.py` → `uv run train.py`) and watch the live loss tick down.
+3. Learn to read the [output summary](#output-format) — the [glossary](#glossary) defines each line.
+4. Do exercises 1 & 2: run the baseline, change one learning rate, log the result. You've now done the loop by hand.
+5. Skim `train.py` for the big picture — don't sweat the details yet.
+
+</details>
+
+<details>
+<summary><b>Track B — ML practitioner / researcher</b></summary>
+
+> Goal: master the modern architecture + optimizer and the fixed-budget benchmarking discipline.
+
+1. Read `train.py` top to bottom.
+2. Study the **Muon optimizer** block (the `muon_step_fused` function): momentum → orthogonalization → NorMuon → cautious decay. Compare it to the AdamW path.
+3. Read `prepare.py`'s **bits-per-byte** eval (`evaluate_bpb`) and the BOS-packed dataloader — understand why the metric is vocab-independent.
+4. Run exercises 4–7: ablate value embeddings, swap the activation, change the window pattern, scale `DEPTH`. Measure each.
+5. Use `analysis.ipynb` to plot your frontier and keep-rate. Reason about compute-vs-quality on *your* GPU.
+
+</details>
+
+<details>
+<summary><b>Track C — Agents & systems</b></summary>
+
+> Goal: learn how to specify a reliable autonomous agent and reason about research-org design.
+
+1. Read `program.md` as a case study in **agent instruction design**: setup, guardrails, output format, logging, and the "NEVER STOP" clause.
+2. Map its rules to the loop diagram above. Note how each guardrail (timeout, crash handling, keep/discard) removes a failure mode.
+3. Run an agent against it and watch `results.tsv` grow. Observe how it recovers from crashes.
+4. Do exercise 9: edit `program.md` (e.g., "when stuck, combine two prior near-misses") and compare research trajectories.
+5. Design a multi-agent variant — parallel branches per GPU — and reason about how you'd merge their findings.
+
+</details>
+
+## The files in detail
+
+| File | Role | Who edits it | What it teaches |
+|------|------|--------------|-----------------|
+| `prepare.py` | data · tokenizer · metric | 🔒 frozen | Tokenization, data pipelines, and why a fixed vocab-independent metric matters. |
+| `train.py` | model · optimizer · loop | ✏️ the agent | Modern transformer architecture and training-loop engineering. |
+| `program.md` | agent instructions | 👤 the human | How to specify reliable, unattended agent behavior with guardrails and a stop condition. |
+| `analysis.ipynb` | results analysis | 📊 you | How to read an experiment record and quantify research progress. |
+
+### Output format
+
+Once a run finishes it prints a summary like this:
 
 ```
-prepare.py      — constants, data prep + runtime utilities (do not modify)
-train.py        — model, optimizer, training loop (agent modifies this)
-program.md      — agent instructions
-pyproject.toml  — dependencies
+---
+val_bpb:          0.997900
+training_seconds: 300.1
+total_seconds:    325.9
+peak_vram_mb:     45060.2
+mfu_percent:      39.80
+total_tokens_M:   499.6
+num_steps:        953
+num_params_M:     50.3
+depth:            8
 ```
+
+The numbers vary by platform since the script always stops after 5 minutes. Extract the key metric with `grep "^val_bpb:" run.log`.
+
+### Logging results
+
+When an experiment is done, log it to `results.tsv` (tab-separated — commas break in descriptions). Five columns:
+
+```
+commit	val_bpb	memory_gb	status	description
+a1b2c3d	0.997900	44.0	keep	baseline
+b2c3d4e	0.993200	44.2	keep	increase LR to 0.04
+c3d4e5f	1.005000	44.0	discard	switch to GeLU activation
+d4e5f6g	0.000000	0.0	crash	double model width (OOM)
+```
+
+`status` is `keep`, `discard`, or `crash`; use `0.000000` / `0.0` for crashes. Leave `results.tsv` untracked by git. Once you have a handful of rows, `analysis.ipynb` will chart the frontier — most experiments get discarded, and the running minimum tells the story of progress.
+
+## Hands-on exercises
+
+Learning sticks when you move a knob and watch the number change. Each of these is a real edit to `train.py` (the config block lives near the bottom). Log every result to `results.tsv`. Difficulty: 🟢 starter · 🟡 intermediate · 🔴 advanced.
+
+1. **🟢 Establish the baseline.** Run `uv run train.py > run.log 2>&1`, then `grep "^val_bpb:" run.log`. Make sure you can explain every line of the summary.
+2. **🟢 Move one learning rate.** Bump `MATRIX_LR` (Muon) or `EMBEDDING_LR` up ~25%, re-run, record keep/discard. This is the full research loop, by hand. Did aggression help in 5 minutes, or destabilize training?
+3. **🟡 Reshape the LR schedule.** Try a short warmup (`WARMUP_RATIO = 0.05`) or a non-zero `FINAL_LR_FRAC`. Compare against baseline.
+4. **🟡 Swap the activation.** Replace the squared-ReLU in the MLP (`F.relu(x).square()`) with GeLU. Measure the `val_bpb` cost. Cheap activations are often surprisingly competitive per unit of compute.
+5. **🟡 Ablate value embeddings.** Force `has_ve()` to return `False` and re-run. How much do the gated value embeddings actually buy? Ablation is how you learn what earns its keep.
+6. **🟡 Trade attention range for throughput.** Change `WINDOW_PATTERN` from `"SSSL"` to `"L"` (all full-context) and to `"SSSSSSSL"`. Watch tokens/sec and steps rise or fall against `val_bpb`.
+7. **🔴 Scale with a single knob.** Set `DEPTH` to 6, then 10. Width, heads, and LR scaling follow automatically. Find the depth that best fits your GPU's 5-minute budget.
+8. **🔴 Analyze the record.** After a dozen experiments, open `analysis.ipynb`. Read your keep-rate and frontier. Which single change bought the most? How many tries did each improvement cost?
+9. **🔴 Program the researcher.** Edit `program.md` — add a strategy rule — then run an agent overnight and compare its trajectory to the baseline instructions. You're now optimizing the *research org*, not the model.
+
+## Glossary
+
+The vocabulary you need to read the code and the output.
+
+| Term | Meaning |
+|------|---------|
+| **val_bpb** | *Validation bits per byte* — the one metric. Per-token loss normalized by target byte length, so it's independent of vocab size. Lower is better. |
+| **BPE tokenizer** | Byte-pair encoding that merges frequent character pairs into an 8,192-token vocabulary. Trained once in `prepare.py`. |
+| **RMSNorm** | Normalization by root-mean-square only (no mean-centering). Parameter-free here, applied pre-block and even on Q/K. |
+| **Rotary embeddings (RoPE)** | Positions encoded by rotating Q/K vectors — captures *relative* position and extrapolates past the trained length. |
+| **QK-norm** | Normalizing queries and keys before attention. Bounds logits and prevents blow-ups — key to stable high-LR training. |
+| **GQA** | *Grouped-query attention* — fewer key/value heads than query heads, shrinking the KV cache. |
+| **Value embeddings** | A "ResFormer" trick: a gated per-token value signal injected into attention on alternating layers, giving direct access to token content. |
+| **Sliding-window attention** | Limiting each layer's attention span (S = half, L = full context) to save compute. The `SSSL` pattern mixes local and global layers. |
+| **Muon** | The optimizer for 2-D weight matrices. It *orthogonalizes* the momentum update so all directions get comparable step sizes. |
+| **AdamW** | Adaptive optimizer used here for embeddings, the head, and scalars — each with its own tuned learning rate. Fused & compiled. |
+| **Gradient accumulation** | Summing gradients over several micro-batches to reach a large effective batch (~524K tokens) without the memory of one giant batch. |
+| **MFU** | *Model FLOPs utilization* — fraction of the GPU's peak compute actually used; a throughput efficiency score. |
+| **bf16 autocast** | Running math in 16-bit brain-float for speed and memory, with automatic precision management. |
+| **Warmdown schedule** | The LR holds flat, then decays linearly to zero over the final half of the run — no warmup, a trapezoid. |
+
+## Self-check
+
+Try to answer each before expanding it. If you can answer all eight, you understand the repo's core ideas.
+
+<details><summary><b>Why measure bits-per-byte instead of loss or perplexity?</b></summary><br>Because it normalizes by target byte length, making the score independent of vocabulary size — so two architectures with different tokenizers or vocabs are still directly comparable.</details>
+
+<details><summary><b>Why does training count wall-clock time but skip the first 10 steps?</b></summary><br>To exclude one-time <code>torch.compile</code> / warmup cost, so the 5-minute budget measures steady-state training only — and stays fair across different GPUs.</details>
+
+<details><summary><b>What makes Muon different from Adam?</b></summary><br>Muon orthogonalizes the momentum update (via a Newton–Schulz-style "Polar Express" iteration) before applying it, so every direction of a weight matrix's update gets a comparable step size. It's used only for 2-D matrices.</details>
+
+<details><summary><b>What problem does QK-norm solve?</b></summary><br>It bounds the size of attention logits, preventing the entropy collapse / numerical blow-ups that otherwise appear under aggressive learning rates.</details>
+
+<details><summary><b>Why re-inject the input embedding x₀ into every layer?</b></summary><br>Deep stacks dilute the original signal. Feeding the normalized input back in (with a learned per-layer weight) gives every block cheap, direct access to token identity.</details>
+
+<details><summary><b>What is the keep-or-discard rule?</b></summary><br>If the new val_bpb is lower than the best so far, keep the commit and advance the branch. Otherwise <code>git reset</code> back to where you started. Log both to results.tsv.</details>
+
+<details><summary><b>What does the "S" vs "L" in SSSL mean?</b></summary><br>S = a short sliding window (half the 2048 context); L = full context. Most layers are S for speed; the pattern repeats and the final layer is always forced to L.</details>
+
+<details><summary><b>Why is program.md the file the human edits, not train.py?</b></summary><br>Because you're not tuning the model — you're programming the <em>agent that tunes it</em>. program.md is the research strategy ("skill"); improving it improves the whole autonomous research org.</details>
 
 ## Design choices
 
 - **Single file to modify.** The agent only touches `train.py`. This keeps the scope manageable and diffs reviewable.
-- **Fixed time budget.** Training always runs for exactly 5 minutes, regardless of your specific platform. This means you can expect approx 12 experiments/hour and approx 100 experiments while you sleep. There are two upsides of this design decision. First, this makes experiments directly comparable regardless of what the agent changes (model size, batch size, architecture, etc). Second, this means that autoresearch will find the most optimal model for your platform in that time budget. The downside is that your runs (and results) become not comparable to other people running on other compute platforms.
+- **Fixed time budget.** Training always runs for exactly 5 minutes, regardless of platform. This means ~12 experiments/hour and ~100 while you sleep. Two upsides: experiments are directly comparable regardless of what the agent changes (model size, batch size, architecture), and autoresearch finds the most optimal model *for your platform* in that budget. The downside is that your results aren't comparable to people running on other compute.
 - **Self-contained.** No external dependencies beyond PyTorch and a few small packages. No distributed training, no complex configs. One GPU, one file, one metric.
 
 ## Platform support
 
-This code currently requires that you have a single NVIDIA GPU. In principle it is quite possible to support CPU, MPS and other platforms but this would also bloat the code. I'm not 100% sure that I want to take this on personally right now. People can reference (or have their agents reference) the full/parent nanochat repository that has wider platform support and shows the various solutions (e.g. a Flash Attention 3 kernels fallback implementation, generic device support, autodetection, etc.), feel free to create forks or discussions for other platforms and I'm happy to link to them here in the README in some new notable forks section or etc.
+This code currently requires a single NVIDIA GPU. Supporting CPU, MPS, and other platforms is quite possible in principle but would bloat the code. People can reference (or have their agents reference) the full/parent [nanochat](https://github.com/karpathy/nanochat) repo, which has wider platform support and shows the various solutions (a Flash Attention 3 kernels fallback, generic device support, autodetection, etc.). Forks for other platforms are welcome — see below.
 
-Seeing as there seems to be a lot of interest in tinkering with autoresearch on much smaller compute platforms than an H100, a few extra words. If you're going to try running autoresearch on smaller computers (Macbooks etc.), I'd recommend one of the forks below. On top of this, here are some recommendations for how to tune the defaults for much smaller models for aspiring forks:
+If you're running autoresearch on much smaller compute (Macbooks etc.), consider one of the [forks](#notable-forks), and tune the defaults for smaller models:
 
-1. To get half-decent results I'd use a dataset with a lot less entropy, e.g. this [TinyStories dataset](https://huggingface.co/datasets/karpathy/tinystories-gpt4-clean). These are GPT-4 generated short stories. Because the data is a lot narrower in scope, you will see reasonable results with a lot smaller models (if you try to sample from them after training).
-2. You might experiment with decreasing `vocab_size`, e.g. from 8192 down to 4096, 2048, 1024, or even - simply byte-level tokenizer with 256 possibly bytes after utf-8 encoding.
-3. In `prepare.py`, you'll want to lower `MAX_SEQ_LEN` a lot, depending on the computer even down to 256 etc. As you lower `MAX_SEQ_LEN`, you may want to experiment with increasing `DEVICE_BATCH_SIZE` in `train.py` slightly to compensate. The number of tokens per fwd/bwd pass is the product of these two.
-4. Also in `prepare.py`, you'll want to decrease `EVAL_TOKENS` so that your validation loss is evaluated on a lot less data.
-5. In `train.py`, the primary single knob that controls model complexity is the `DEPTH` (default 8, here). A lot of variables are just functions of this, so e.g. lower it down to e.g. 4.
-6. You'll want to most likely use `WINDOW_PATTERN` of just "L", because "SSSL" uses alternating banded attention pattern that may be very inefficient for you. Try it.
-7. You'll want to lower `TOTAL_BATCH_SIZE` a lot, but keep it powers of 2, e.g. down to `2**14` (~16K) or so even, hard to tell.
+1. Use a lower-entropy dataset, e.g. this [TinyStories dataset](https://huggingface.co/datasets/karpathy/tinystories-gpt4-clean) (GPT-4 generated short stories). Narrower data gives reasonable results with much smaller models.
+2. Decrease `vocab_size`, e.g. from 8192 down to 4096, 2048, 1024, or even a byte-level tokenizer (256 possible bytes after UTF-8 encoding).
+3. In `prepare.py`, lower `MAX_SEQ_LEN` a lot — even to 256. As you lower it, consider increasing `DEVICE_BATCH_SIZE` in `train.py` to compensate. Tokens per fwd/bwd pass is the product of the two.
+4. Also in `prepare.py`, decrease `EVAL_TOKENS` so validation is evaluated on less data.
+5. In `train.py`, the primary knob for model complexity is `DEPTH` (default 8). Many variables are functions of it, so lower it to e.g. 4.
+6. Use a `WINDOW_PATTERN` of just `"L"` — `"SSSL"` uses an alternating banded attention pattern that may be inefficient for you. (Try it.)
+7. Lower `TOTAL_BATCH_SIZE` a lot, but keep it a power of 2, e.g. down to `2**14` (~16K).
 
-I think these would be the reasonable hyperparameters to play with. Ask your favorite coding agent for help and copy paste them this guide, as well as the full source code.
+Ask your favorite coding agent for help and paste it this guide plus the full source code.
 
 ## Notable forks
 
@@ -86,6 +321,14 @@ I think these would be the reasonable hyperparameters to play with. Ask your fav
 - [trevin-creator/autoresearch-mlx](https://github.com/trevin-creator/autoresearch-mlx) (MacOS)
 - [jsegov/autoresearch-win-rtx](https://github.com/jsegov/autoresearch-win-rtx) (Windows)
 - [andyluo7/autoresearch](https://github.com/andyluo7/autoresearch) (AMD)
+
+## Further reading
+
+- **[nanochat](https://github.com/karpathy/nanochat)** — the fuller parent project this training code is cherry-picked from, with wider platform support.
+- **modded-nanogpt** — the training-speedrun lineage where Muon, value embeddings, and these tricks were battle-tested.
+- **The Muon writeup** — how orthogonalized momentum works and why it helps matrix parameters.
+- **RoFormer (RoPE)** and **ResFormer** (value residuals) — primary sources for two of the architecture's key ideas.
+- **[@karpathy's launch tweets](https://x.com/karpathy/status/2029701092347630069)** and the ["Dummy's Guide"](https://x.com/hooeem/status/2030720614752039185) for gentler background.
 
 ## License
 

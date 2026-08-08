@@ -206,6 +206,32 @@ Three routes through the same material, depending on where you're starting. Each
 | `program.md` | agent instructions | 👤 the human | How to specify reliable, unattended agent behavior with guardrails and a stop condition. |
 | `analysis.ipynb` | results analysis | 📊 you | How to read an experiment record and quantify research progress. |
 
+### The model at a glance
+
+`train.py` implements a modern GPT — not the GPT-2 design, but the current speedrun-era stack. The forward pass mirrors the code exactly: the token embedding is normalized once and stashed as `x₀`, then re-injected (with a learned weight) before every block, so each layer keeps direct access to the raw input.
+
+```mermaid
+flowchart TB
+    tok["token ids (B, T)"] --> emb["embedding → bf16"]
+    emb --> n0["RMSNorm"]
+    n0 --> x0(["save as x₀"])
+    n0 --> mix
+    subgraph blk["× DEPTH transformer blocks"]
+        direction TB
+        mix["mix: λ·x + μ·x₀"] --> na["RMSNorm → attention<br/>RoPE · QK-norm · GQA · value-emb · sliding window"]
+        na --> add1(("＋ residual"))
+        add1 --> nm["RMSNorm → MLP (squared-ReLU)"]
+        nm --> add2(("＋ residual"))
+    end
+    x0 -.->|re-injected each layer| mix
+    blk --> nf["RMSNorm"]
+    nf --> head["lm_head → vocab"]
+    head --> cap["softcap: 15·tanh"]
+    cap --> loss["cross-entropy → val_bpb"]
+```
+
+Every labeled trick — RoPE, QK-norm, GQA, value embeddings, sliding windows, squared-ReLU — is defined in the [glossary](#glossary). Model width is derived from a single knob: `model_dim = DEPTH × 64` (rounded to the head dimension), so heads and learning-rate scaling all follow from `DEPTH`.
+
 ### Output format
 
 Once a run finishes it prints a summary like this:

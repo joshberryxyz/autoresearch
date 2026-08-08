@@ -324,7 +324,7 @@ Try to answer each before expanding it. If you can answer all eight, you underst
 
 The default `program.md` is the simplest possible research org: one agent, one hill-climb, one metric. But the repo's whole conceit — the "10,205th generation, self-modifying" flavor text — is an invitation to build *better* orgs. The training code (`train.py`, `prepare.py`) stays exactly as-is; everything below is built by editing `program.md` and adding thin orchestration around it (git branches, a couple of Markdown files, a scheduler).
 
-Here are blueprints, from a single sharper agent to a self-improving swarm. Mix and match.
+Here are blueprints, from a single sharper agent to a self-improving swarm. Mix and match. Several ship as runnable starter files in [`examples/`](examples/) — look for the **📎 starter** pointers below.
 
 ### 1. Comprehensive goal setting (a research charter)
 
@@ -359,6 +359,8 @@ The single instruction "get the lowest `val_bpb`" is a weak goal — it says not
 
 Comprehensive goals turn a random walk into a directed search: the agent knows what "good" means, what it may not touch, and how to get unstuck.
 
+> 📎 **starter:** [`examples/program.charter.md`](examples/program.charter.md) — a complete drop-in `program.md` with this charter built in.
+
 ### 2. A lab notebook that persists across nights
 
 `results.tsv` records *what* happened; it doesn't record *why*, or the lessons. Add a `LESSONS.md` the agent **reads before every experiment and appends after** — the difference between an agent that rediscovers the same dead ends nightly and one whose knowledge compounds.
@@ -380,6 +382,8 @@ Comprehensive goals turn a random walk into a directed search: the agent knows w
 
 This is what makes research *continuous* rather than episodic: memory that survives a restarted container.
 
+> 📎 **starter:** [`examples/LESSONS.md`](examples/LESSONS.md) — the lab-notebook template.
+
 ### 3. A specialist swarm
 
 One GPU, one agent is a bottleneck. Run several agents in parallel, each on its own branch with a **focused mandate**, plus a "principal investigator" that periodically reads every branch's `results.tsv`, crowns the current champion, merges wins into a shared baseline, and reassigns focus.
@@ -399,6 +403,8 @@ flowchart TB
 ```
 
 Because `val_bpb` is a single comparable number and each agent works on its own branch, merging is trivial: the champion is just whichever branch holds the lowest number.
+
+> 📎 **starter:** [`examples/program.swarm.md`](examples/program.swarm.md) — roles + a principal-investigator protocol.
 
 ### 4. Evolutionary search
 
@@ -439,9 +445,11 @@ flowchart LR
 To make it truly continuous rather than something you babysit:
 
 - **Schedule it** — kick off a fresh run on a nightly cron so the lab never idles.
-- **Dashboard it** — extend `analysis.ipynb` into a live view of the frontier, keep-rate, and VRAM over time.
-- **Report it** — auto-generate a "morning report" summarizing the night's frontier moves and the current champion's diff.
+- **Dashboard it** — a live view of the frontier, keep-rate, and champion over time.
+- **Report it** — auto-generate a "morning report" summarizing the night's frontier moves and the current champion.
 - **Alert it** — ping yourself only when a new record is set, so you can stay hands-off otherwise.
+
+> 📎 **starter:** [`examples/dashboard.py`](examples/dashboard.py) — `uv run examples/dashboard.py` prints the dashboard and can emit a Markdown report or a PNG frontier plot.
 
 ---
 

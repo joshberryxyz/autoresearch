@@ -73,7 +73,7 @@ Each pass is one small hypothesis: edit, commit, train, measure, then keep it or
 
 ## Quick start
 
-**Requirements:** a single NVIDIA GPU (tested on an 80GB H100), Python 3.10+, and [uv](https://docs.astral.sh/uv/). At default settings a run peaks around 45GB of VRAM, so an 80GB card is the comfortable target.
+**Requirements:** a single Hopper-class NVIDIA GPU (H100, H200, or H800; tested on an 80GB H100), Python 3.10+, and [uv](https://docs.astral.sh/uv/). At default settings a run peaks around 45GB of VRAM. Other NVIDIA cards can work with small code changes, described below.
 
 **No NVIDIA GPU?** You can rent one by the hour for a few dollars. See [Renting a GPU on vast.ai](#renting-a-gpu-on-vastai) below.
 
@@ -97,19 +97,31 @@ If those commands all work, your setup is good and you can go into autonomous re
 
 [vast.ai](https://vast.ai) is a marketplace where people rent out their GPUs by the hour, usually well below the big clouds. It suits this project well: each experiment is only five minutes, so you can rent a card for one evening, get a hundred experiments out of it, and shut it down.
 
-**1. Pick the right GPU.** Ask for a single **H100 with 80GB**. That is what this code was written against, and three things in `train.py` assume it:
+**1. Pick the GPU.** You do not need an H100 specifically, but you do want **Hopper-class** hardware, because `train.py` uses Flash Attention 3 and FA3 was built for Hopper. The code checks the compute capability and picks a Hopper-tuned kernel for `9.0`, falling back to a generic build otherwise.
 
-- The attention path uses Flash Attention 3, and the code picks a Hopper-only kernel build when it sees an H100, falling back to a generic build otherwise. The fallback is not guaranteed to work on older cards.
-- A default run peaks near 45GB of VRAM. On a smaller card you must lower `DEVICE_BATCH_SIZE` or it will run out of memory.
-- The reported MFU is computed against a hardcoded H100 peak-FLOPs number, so on any other card that percentage is meaningless. Your `val_bpb` is still perfectly valid.
+| GPU | Verdict | Notes |
+|-----|---------|-------|
+| **H100 80GB** | Drop-in | The reference setup, and the cheapest easy option |
+| **H200 141GB** | Drop-in | Same Hopper architecture, more and faster memory |
+| **H800** | Drop-in | Hopper variant, same capability 9.0 |
+| **B200 / Blackwell** | Probably, untested | Takes the fallback kernel path; verify before booking a long run |
+| **A100 80GB** | Needs a code change | Ampere has plenty of VRAM but cannot run FA3 |
+| **L40S 48GB, RTX 4090 24GB** | Needs a code change | Ada, plus you must lower the batch size on a 24GB card |
 
-Other cards can work with tuning; see [Platform support](#platform-support) for how to scale things down.
+To run on Ampere or Ada, swap the FA3 import for **FlashAttention-2**, which supports those cards and takes the same `window_size` argument the sliding-window pattern relies on, so the call site barely changes. The [forks](#notable-forks) below have already solved this for several platforms.
+
+Two smaller things to know, neither of which is a blocker:
+
+- **Memory.** A default run peaks near 45GB. On a smaller card, lower `DEVICE_BATCH_SIZE` and keep it a power of 2. This is safe: gradient accumulation automatically compensates, so the effective batch stays at 524K tokens and the training math is unchanged. You just do more, smaller passes.
+- **MFU.** The reported percentage is computed against a hardcoded H100 peak-FLOPs constant, so it is meaningless on any other card until you edit that number. Your `val_bpb` is still completely valid, and that is the metric that decides experiments.
+
+One thing worth accepting either way: because the budget is a fixed five minutes of wall-clock time, a slower card simply trains on fewer tokens and lands at a higher `val_bpb`. Your runs stay perfectly comparable with each other, just not with someone else's hardware. That is true of this project by design.
 
 **2. Create the instance.** Sign up, add credit, then search the listings with these filters:
 
 | Setting | Choose |
 |---------|--------|
-| GPU | H100 (SXM or PCIe), quantity 1 |
+| GPU | H100, H200, or H800, quantity 1 |
 | Disk | 100GB is plenty and costs very little |
 | Image | A PyTorch or CUDA 12.8 template |
 | Type | **On-demand**, not interruptible |

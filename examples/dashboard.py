@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-examples/dashboard.py — a standalone status dashboard for an autoresearch run.
+examples/dashboard.py: a standalone status dashboard for an autoresearch run.
 
 Reads results.tsv (the experiment log described in program.md) and prints a
 summary of research progress: how many experiments ran, the keep-rate, the
@@ -101,7 +101,7 @@ def render_text(s):
 
 
 def render_markdown(s):
-    lines = ["# autoresearch — morning report", ""]
+    lines = ["# autoresearch: morning report", ""]
     lines.append(f"- **Experiments:** {s['n']} (keep {s['n_keep']} · discard {s['n_discard']} · crash {s['n_crash']})")
     lines.append(f"- **Keep-rate:** {s['keep_rate']:.0%}")
     if s["baseline"] == s["baseline"]:
@@ -109,7 +109,7 @@ def render_markdown(s):
         lines.append(f"- **Baseline → best:** {s['baseline']:.6f} → {s['best']:.6f} val_bpb ({pct:.2f}% better)")
     if s["champion"] is not None:
         c = s["champion"]
-        lines.append(f"- **Champion:** `{str(c['commit']).strip()}` — {str(c['description']).strip()} ({c['val_bpb']:.6f})")
+        lines.append(f"- **Champion:** {str(c['description']).strip()} (`{str(c['commit']).strip()}`, {c['val_bpb']:.6f})")
     spark = sparkline(list(s["frontier"]))
     if spark:
         lines.append("")
@@ -134,7 +134,7 @@ def save_plot(df, s, path):
     ax.plot(valid.index, s["frontier"], c="#a96b14", lw=2, label="frontier (running min)", zorder=1)
     ax.set_xlabel("experiment")
     ax.set_ylabel("val_bpb (lower is better)")
-    ax.set_title("autoresearch — val_bpb frontier")
+    ax.set_title("autoresearch val_bpb frontier")
     ax.legend()
     ax.grid(True, alpha=0.2)
     fig.tight_layout()

@@ -1,7 +1,7 @@
 # Starter kit
 
 Runnable companions to the [continuous-research-org blueprints](../README.md#scaling-up-a-continuous-research-org)
-in the main README. These are optional add-ons — the core project is still just
+in the main README. These are optional add-ons; the core project is still just
 the four files in the repo root. Copy what you need and edit freely.
 
 | File | Blueprint | What it is | How to use |

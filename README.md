@@ -25,6 +25,7 @@ This README is both the project overview and a **study guide**. If you just want
 
 - [How it works](#how-it-works)
 - [Quick start](#quick-start)
+  - [Renting a GPU on vast.ai](#renting-a-gpu-on-vastai)
 - [Running the agent](#running-the-agent)
 - [Your first hour](#your-first-hour)
 - [What you'll learn](#what-youll-learn)
@@ -72,7 +73,9 @@ Each pass is one small hypothesis: edit, commit, train, measure, then keep it or
 
 ## Quick start
 
-**Requirements:** A single NVIDIA GPU (tested on H100), Python 3.10+, [uv](https://docs.astral.sh/uv/).
+**Requirements:** a single NVIDIA GPU (tested on an 80GB H100), Python 3.10+, and [uv](https://docs.astral.sh/uv/). At default settings a run peaks around 45GB of VRAM, so an 80GB card is the comfortable target.
+
+**No NVIDIA GPU?** You can rent one by the hour for a few dollars. See [Renting a GPU on vast.ai](#renting-a-gpu-on-vastai) below.
 
 ```bash
 # 1. Install uv project manager (if you don't already have it)
@@ -89,6 +92,57 @@ uv run train.py
 ```
 
 If those commands all work, your setup is good and you can go into autonomous research mode.
+
+### Renting a GPU on vast.ai
+
+[vast.ai](https://vast.ai) is a marketplace where people rent out their GPUs by the hour, usually well below the big clouds. It suits this project well: each experiment is only five minutes, so you can rent a card for one evening, get a hundred experiments out of it, and shut it down.
+
+**1. Pick the right GPU.** Ask for a single **H100 with 80GB**. That is what this code was written against, and three things in `train.py` assume it:
+
+- The attention path uses Flash Attention 3, and the code picks a Hopper-only kernel build when it sees an H100, falling back to a generic build otherwise. The fallback is not guaranteed to work on older cards.
+- A default run peaks near 45GB of VRAM. On a smaller card you must lower `DEVICE_BATCH_SIZE` or it will run out of memory.
+- The reported MFU is computed against a hardcoded H100 peak-FLOPs number, so on any other card that percentage is meaningless. Your `val_bpb` is still perfectly valid.
+
+Other cards can work with tuning; see [Platform support](#platform-support) for how to scale things down.
+
+**2. Create the instance.** Sign up, add credit, then search the listings with these filters:
+
+| Setting | Choose |
+|---------|--------|
+| GPU | H100 (SXM or PCIe), quantity 1 |
+| Disk | 100GB is plenty and costs very little |
+| Image | A PyTorch or CUDA 12.8 template |
+| Type | **On-demand**, not interruptible |
+
+Interruptible instances are cheaper but can be outbid and killed mid-run, which will ruin an overnight session. Sorting by reliability rather than by raw price is usually worth the small premium.
+
+**3. Connect and set up.** vast.ai gives you an SSH command once the instance is running:
+
+```bash
+ssh -p <port> root@<host>
+
+curl -LsSf https://astral.sh/uv/install.sh | sh
+git clone https://github.com/joshberryxyz/autoresearch.git && cd autoresearch
+uv sync
+uv run prepare.py
+uv run train.py
+```
+
+**4. Run inside tmux.** An overnight agent session must survive a dropped SSH connection, so start everything in a tmux session:
+
+```bash
+tmux new -s research
+# install your agent CLI and start it here, or just run experiments by hand
+# detach with ctrl-b then d, and reconnect later with:
+tmux attach -t research
+```
+
+Your coding agent runs on the rented box, not on your laptop, so install it there too.
+
+**5. Watch the meter.** An H100 typically goes for a couple of dollars an hour, so a full night of autonomous research usually lands in the tens of dollars. Prices move constantly, so check current rates rather than trusting that figure. Two habits keep the bill small:
+
+- Commit and push anything you want to keep before you finish.
+- **Destroy the instance when you are done, not just stop it.** A stopped instance still bills you for its storage.
 
 ## Running the agent
 
